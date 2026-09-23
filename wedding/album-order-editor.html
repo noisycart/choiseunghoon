@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wedding Album 순서 편집기</title>
+  <style>
+    :root {
+      --bg:#f5f3ef; --card:#fff; --text:#24211e; --muted:#766f68;
+      --line:#ded9d2; --accent:#24211e; --danger:#9a3e3e; --soft:#ece8e2;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Noto Sans KR",
+      "Apple SD Gothic Neo","Segoe UI",sans-serif;
+    }
+    .top {
+      position:sticky; top:0; z-index:20;
+      background:rgba(245,243,239,.94);
+      backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--line);
+    }
+    .bar {
+      max-width:1200px; margin:auto; padding:14px 16px;
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
+    h1 { font-size:18px; margin:0 auto 0 0; }
+    .status { color:var(--muted); font-size:13px; }
+    button {
+      border:1px solid var(--line); background:white; color:var(--text);
+      padding:9px 12px; border-radius:9px; cursor:pointer; font-weight:650;
+    }
+    button.primary { background:var(--accent); color:white; border-color:var(--accent); }
+    button.danger { color:var(--danger); }
+    button:hover { filter:brightness(.97); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .wrap { max-width:1200px; margin:auto; padding:20px 16px 80px; }
+    .help {
+      background:white; border:1px solid var(--line); border-radius:12px;
+      padding:14px 16px; margin-bottom:16px; color:var(--muted);
+      font-size:14px; line-height:1.6;
+    }
+    .section-head {
+      display:flex; align-items:center; gap:10px;
+      margin:24px 0 10px;
+    }
+    .section-head h2 {
+      margin:0; font-size:15px;
+    }
+    .count {
+      color:var(--muted); font-size:12px;
+      background:var(--soft); border-radius:999px; padding:4px 8px;
+    }
+    .grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(135px,1fr));
+      gap:10px;
+    }
+    .item {
+      background:var(--card); border:1px solid var(--line); border-radius:10px;
+      overflow:hidden; cursor:grab; user-select:none; touch-action:none;
+      position:relative;
+    }
+    .item:active { cursor:grabbing; }
+    .item img {
+      width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
+      background:#e6e2dc; pointer-events:none;
+    }
+    .meta {
+      padding:8px 9px; display:flex; align-items:center; gap:6px;
+      font-size:12px; min-width:0;
+    }
+    .num {
+      display:inline-grid; place-items:center;
+      min-width:26px; height:22px; padding:0 6px; border-radius:999px;
+      background:var(--soft); font-weight:750;
+    }
+    .name {
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      color:var(--muted); flex:1;
+    }
+    .hide-btn, .restore-btn {
+      position:absolute; top:7px; right:7px;
+      width:34px; height:34px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.7);
+      background:rgba(20,18,16,.72); color:white;
+      display:grid; place-items:center; padding:0;
+      font-size:17px; line-height:1; cursor:pointer;
+      backdrop-filter:blur(6px);
+      z-index:3;
+    }
+    .restore-btn {
+      background:rgba(255,255,255,.88);
+      color:var(--text); border-color:var(--line);
+      font-size:16px;
+    }
+    .hidden-grid .item {
+      opacity:.72;
+      cursor:default;
+      filter:saturate(.55);
+    }
+    .hidden-grid .item img { filter:grayscale(.25); }
+    .sortable-ghost { opacity:.25; }
+    .sortable-chosen { box-shadow:0 12px 28px rgba(0,0,0,.18); }
+    .loading, .error {
+      padding:50px 16px; text-align:center; color:var(--muted);
+    }
+    .error { color:var(--danger); }
+    .empty-hidden {
+      border:1px dashed var(--line);
+      border-radius:10px; padding:22px 16px;
+      color:var(--muted); text-align:center; font-size:13px;
+    }
+    code { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+    @media (max-width:600px) {
+      .bar { align-items:flex-start; }
+      h1 { width:100%; }
+      .grid { grid-template-columns:repeat(3,1fr); gap:7px; }
+      .meta { padding:6px; }
+      .name { display:none; }
+      .hide-btn, .restore-btn { width:30px; height:30px; top:5px; right:5px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="bar">
+      <h1>Wedding Album 순서 편집기</h1>
+      <span class="status" id="status">index.html 읽는 중…</span>
+      <button id="resetBtn">모두 원래대로</button>
+      <button id="restoreAllBtn">숨긴 사진 모두 복원</button>
+      <button class="primary" id="saveBtn" disabled>새 index.html 저장</button>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <div class="help">
+      사진을 마우스나 손가락으로 끌어 순서를 바꾸세요.
+      사진 오른쪽 위의 <b>×</b> 버튼을 누르면 앨범에서 숨겨집니다.
+      숨긴 사진은 아래 <b>숨긴 사진</b> 영역에서 다시 복원할 수 있습니다.
+      실제 이미지 파일은 삭제되지 않습니다.
+      정리가 끝나면 <b>새 index.html 저장</b>을 눌러 기존 <code>index.html</code>과 교체하세요.
+    </div>
+
+    <div id="loading" class="loading">앨범 정보를 불러오고 있습니다.</div>
+    <div id="error" class="error" hidden></div>
+
+    <section id="visibleSection" hidden>
+      <div class="section-head">
+        <h2>앨범에 표시할 사진</h2>
+        <span class="count" id="visibleCount">0장</span>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <section id="hiddenSection" hidden>
+      <div class="section-head">
+        <h2>숨긴 사진</h2>
+        <span class="count" id="hiddenCount">0장</span>
+      </div>
+      <div id="hiddenGrid" class="grid hidden-grid"></div>
+      <div id="hiddenEmpty" class="empty-hidden">숨긴 사진이 없습니다.</div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <script>
+    let sourceHTML = "";
+    let albumData = null;
+    let originalPhotos = [];
+    let originalMatchText = "";
+    let hiddenPhotos = [];
+
+    const grid = document.getElementById("grid");
+    const hiddenGrid = document.getElementById("hiddenGrid");
+    const statusEl = document.getElementById("status");
+    const saveBtn = document.getElementById("saveBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const restoreAllBtn = document.getElementById("restoreAllBtn");
+    const loadingEl = document.getElementById("loading");
+    const errorEl = document.getElementById("error");
+    const visibleSection = document.getElementById("visibleSection");
+    const hiddenSection = document.getElementById("hiddenSection");
+    const visibleCount = document.getElementById("visibleCount");
+    const hiddenCount = document.getElementById("hiddenCount");
+    const hiddenEmpty = document.getElementById("hiddenEmpty");
+
+    function basename(path) {
+      return (path || "").split("/").pop();
+    }
+
+    function updateCountsAndNumbers() {
+      [...grid.children].forEach((el, i) => {
+        el.querySelector(".num").textContent = i + 1;
+      });
+
+      visibleCount.textContent = `${grid.children.length}장`;
+      hiddenCount.textContent = `${hiddenPhotos.length}장`;
+      hiddenEmpty.hidden = hiddenPhotos.length > 0;
+      hiddenGrid.hidden = hiddenPhotos.length === 0;
+      restoreAllBtn.disabled = hiddenPhotos.length === 0;
+
+      statusEl.textContent =
+        `${grid.children.length}장 표시 · ${hiddenPhotos.length}장 숨김`;
+    }
+
+    function makeVisibleItem(p) {
+      const el = document.createElement("div");
+      el.className = "item";
+      el.dataset.key = p.__editorKey;
+
+      const img = document.createElement("img");
+      img.src = p.thumb || p.full;
+      img.alt = "";
+      img.loading = "lazy";
+
+      const hideBtn = document.createElement("button");
+      hideBtn.className = "hide-btn";
+      hideBtn.type = "button";
+      hideBtn.title = "앨범에서 숨기기";
+      hideBtn.setAttribute("aria-label", "앨범에서 숨기기");
+      hideBtn.textContent = "×";
+      hideBtn.addEventListener("pointerdown", e => e.stopPropagation());
+      hideBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        hidePhoto(p.__editorKey);
+      });
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const num = document.createElement("span");
+      num.className = "num";
+
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = basename(p.full);
+
+      meta.append(num, name);
+      el.append(img, hideBtn, meta);
+      return el;
+    }
+
+    function makeHiddenItem(p) {
+      const el = document.createElement("div");
+      el.className = "item";
+      el.dataset.key = p.__editorKey;
+
+      const img = document.createElement("img");
+      img.src = p.thumb || p.full;
+      img.alt = "";
+      img.loading = "lazy";
+
+      const restoreBtn = document.createElement("button");
+      restoreBtn.className = "restore-btn";
+      restoreBtn.type = "button";
+      restoreBtn.title = "앨범에 다시 표시";
+      restoreBtn.setAttribute("aria-label", "앨범에 다시 표시");
+      restoreBtn.textContent = "↩";
+      restoreBtn.addEventListener("click", () => restorePhoto(p.__editorKey));
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = basename(p.full);
+
+      meta.append(name);
+      el.append(img, restoreBtn, meta);
+      return el;
+    }
+
+    function renderVisible(photos) {
+      grid.innerHTML = "";
+      photos.forEach(p => grid.appendChild(makeVisibleItem(p)));
+      updateCountsAndNumbers();
+    }
+
+    function renderHidden() {
+      hiddenGrid.innerHTML = "";
+      hiddenPhotos.forEach(p => hiddenGrid.appendChild(makeHiddenItem(p)));
+      updateCountsAndNumbers();
+    }
+
+    function allPhotoMap() {
+      const map = new Map();
+      [...originalPhotos, ...hiddenPhotos].forEach(p => map.set(p.__editorKey, p));
+      return map;
+    }
+
+    function getCurrentVisiblePhotos() {
+      const map = allPhotoMap();
+      return [...grid.children]
+        .map(el => map.get(el.dataset.key))
+        .filter(Boolean);
+    }
+
+    function hidePhoto(key) {
+      if (grid.children.length <= 1) {
+        alert("앨범에는 최소 1장의 사진이 남아 있어야 합니다.");
+        return;
+      }
+
+      const current = getCurrentVisiblePhotos();
+      const photo = current.find(p => p.__editorKey === key);
+      if (!photo) return;
+
+      hiddenPhotos.push(photo);
+      const el = grid.querySelector(`[data-key="${CSS.escape(key)}"]`);
+      if (el) el.remove();
+
+      renderHidden();
+      updateCountsAndNumbers();
+    }
+
+    function restorePhoto(key) {
+      const idx = hiddenPhotos.findIndex(p => p.__editorKey === key);
+      if (idx < 0) return;
+
+      const [photo] = hiddenPhotos.splice(idx, 1);
+      grid.appendChild(makeVisibleItem(photo));
+      renderHidden();
+      updateCountsAndNumbers();
+    }
+
+    function cleanPhoto(p) {
+      const {__editorKey, ...clean} = p;
+      return clean;
+    }
+
+    async function loadAlbum() {
+      try {
+        const res = await fetch("./index.html", { cache: "no-store" });
+        if (!res.ok) throw new Error(`index.html을 읽을 수 없습니다. (${res.status})`);
+        sourceHTML = await res.text();
+
+        const re = /const\s+ALBUM_DATA\s*=\s*(\{[\s\S]*?\})\s*;/;
+        const m = sourceHTML.match(re);
+        if (!m) throw new Error("index.html에서 ALBUM_DATA를 찾지 못했습니다.");
+
+        originalMatchText = m[0];
+        albumData = JSON.parse(m[1]);
+
+        albumData.photos = (albumData.photos || []).map((p, i) => ({
+          ...p,
+          __editorKey: `p_${i}_${p.full || ""}`
+        }));
+
+        originalPhotos = albumData.photos.map(p => ({...p}));
+        hiddenPhotos = [];
+
+        if (!albumData.photos.length) throw new Error("앨범에 사진이 없습니다.");
+
+        renderVisible(albumData.photos);
+        renderHidden();
+
+        loadingEl.hidden = true;
+        visibleSection.hidden = false;
+        hiddenSection.hidden = false;
+        saveBtn.disabled = false;
+
+        new Sortable(grid, {
+          animation: 170,
+          ghostClass: "sortable-ghost",
+          chosenClass: "sortable-chosen",
+          delay: 80,
+          delayOnTouchOnly: true,
+          touchStartThreshold: 4,
+          filter: ".hide-btn",
+          preventOnFilter: false,
+          onEnd: updateCountsAndNumbers
+        });
+      } catch (err) {
+        loadingEl.hidden = true;
+        errorEl.hidden = false;
+        errorEl.textContent =
+          err.message +
+          " 이 편집기는 GitHub Pages 등 웹 서버에서 index.html과 같은 폴더에 올린 뒤 열어야 합니다.";
+        statusEl.textContent = "불러오기 실패";
+      }
+    }
+
+    resetBtn.addEventListener("click", () => {
+      if (!albumData) return;
+
+      hiddenPhotos = [];
+      albumData.photos = originalPhotos.map(p => ({...p}));
+      renderVisible(albumData.photos);
+      renderHidden();
+      statusEl.textContent = "원래 순서와 표시 상태로 복원";
+    });
+
+    restoreAllBtn.addEventListener("click", () => {
+      if (!hiddenPhotos.length) return;
+
+      const current = getCurrentVisiblePhotos();
+      const restored = [...current, ...hiddenPhotos];
+      hiddenPhotos = [];
+      renderVisible(restored);
+      renderHidden();
+      statusEl.textContent = "숨긴 사진을 모두 앨범 맨 뒤에 복원";
+    });
+
+    saveBtn.addEventListener("click", () => {
+      if (!albumData || !sourceHTML) return;
+
+      const orderedVisible = getCurrentVisiblePhotos().map(cleanPhoto);
+
+      const cleanData = {
+        ...albumData,
+        photos: orderedVisible
+      };
+
+      const replacement =
+        "const ALBUM_DATA = " +
+        JSON.stringify(cleanData, null, 2) +
+        ";";
+
+      const updatedHTML = sourceHTML.replace(originalMatchText, replacement);
+      const blob = new Blob([updatedHTML], {type:"text/html;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "index.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      statusEl.textContent =
+        `저장 완료 · ${orderedVisible.length}장 표시 · ${hiddenPhotos.length}장 숨김`;
+    });
+
+    loadAlbum();
+  </script>
+</body>
+</html>
