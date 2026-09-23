@@ -185,6 +185,7 @@
     }
 
     #gallery,
+    #storyFilm,
     #highlightFilm,
     #fullFilm {
       scroll-margin-top: 24px;
@@ -454,14 +455,16 @@
       .hero { min-height: 74svh; }
       .hero-inner { padding-bottom: 46px; }
       .hero-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: min(100%, 292px);
         gap: 6px;
-        margin-top: 24px;
-        flex-wrap: nowrap;
+        margin: 24px auto 0;
       }
       .hero-actions a {
         min-width: 0;
-        flex: 1 1 0;
-        max-width: 132px;
+        width: 100%;
+        max-width: none;
         padding: 9px 8px;
         gap: 5px;
         font-size: 11.5px;
@@ -517,7 +520,7 @@
     .intro-subtitle, .film-desc { word-break:keep-all; }
     .gallery-wrap { padding-bottom:0; }
     .full-film-section { margin-top:72px; }
-    #gallery, #highlightFilm, #fullFilm { scroll-margin-top:88px; }
+    #gallery, #storyFilm, #highlightFilm, #fullFilm { scroll-margin-top:88px; }
     .gallery-title { text-align:center; font-size:20px; font-weight:500; margin:0 0 24px; }
     .gallery-title span { font:12px sans-serif; color:var(--muted); margin-left:8px; }
     .section-nav { position:fixed; z-index:30; top:12px; left:50%; transform:translateX(-50%); display:flex; width:max-content; max-width:calc(100% - 24px); padding:4px; gap:2px; border:1px solid var(--line); border-radius:30px; background:rgba(255,253,249,.96); box-shadow:0 4px 20px #25211d18; }
@@ -537,7 +540,7 @@
     @media(max-width:700px) {
       .hero-actions a { font-size:12px; }
       .full-film-section { margin-top:56px; }
-      .section-nav a { padding:0 10px; }
+      .section-nav a { padding:0 7px; font-size:11px; }
     }
     @media(prefers-reduced-motion:reduce) {
       html { scroll-behavior:auto; }
@@ -553,6 +556,14 @@
       <h1 id="coupleNames">Our Wedding</h1>
       <p class="date" id="weddingDate"></p>
       <nav class="hero-actions" aria-label="앨범 바로가기">
+        <a href="#storyFilm">
+          <svg class="hero-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 5.5h16v13H4z"></path>
+            <path d="M8 9.5h8M8 12h8M8 14.5h5"></path>
+          </svg>
+          <span>우리 이야기</span>
+        </a>
+
         <a href="#highlightFilm">
           <svg class="hero-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <rect x="3.5" y="5.5" width="17" height="13" rx="2"></rect>
@@ -584,6 +595,29 @@
   <section class="intro">
     <p id="introText">함께한 하루의 장면들을 한곳에 담았습니다.</p>
     <div class="rule"></div>
+  </section>
+
+  <section class="video-section" id="storyFilm" aria-labelledby="storyFilmTitle">
+    <div class="video-label">OUR STORY</div>
+    <h2 id="storyFilmTitle">우리가 결혼하기까지</h2>
+    <p class="film-desc">
+      공기놀이로 시작된 인연부터 뜻밖의 군대 생활관 만남, 그리고 청혼까지.<br>
+      우리의 이야기를 한 편의 리포트로 담았습니다.
+    </p>
+    <div class="video-frame">
+      <iframe
+        id="storyPlayer"
+        src="https://www.youtube-nocookie.com/embed/Z1nRKmEroI8?enablejsapi=1&amp;playsinline=1&amp;rel=0"
+        title="공기놀이 하실래요?…군대서 처남 만난 기자의 결혼기"
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen>
+      </iframe>
+    </div>
+    <p class="film-help">
+      <a class="film-fallback" href="https://www.youtube.com/watch?v=Z1nRKmEroI8" target="_blank" rel="noopener">YouTube에서 보기 ↗</a>
+    </p>
   </section>
 
   <section class="video-section" id="highlightFilm" aria-labelledby="weddingFilmTitle">
@@ -1403,7 +1437,7 @@
 
     const sectionNav = $("#sectionNav");
     sectionNav.innerHTML = $(".hero-actions").innerHTML;
-    const sections = [$("#highlightFilm"), $("#gallery"), $("#fullFilm")];
+    const sections = [$("#storyFilm"), $("#highlightFilm"), $("#gallery"), $("#fullFilm")];
     let scrollPending = false;
     function updateNav() {
       sectionNav.hidden = $(".hero").getBoundingClientRect().bottom > 0;
@@ -1422,7 +1456,7 @@
     const chapterButtons = [...document.querySelectorAll(".chapter-link")];
     const filmStatus = $("#filmStatus");
     const filmFallback = $("#filmFallback");
-    let fullPlayer, highlightPlayer, fullReady=false, queuedStart=null, apiRequested=false, chapterTimer=null;
+    let fullPlayer, highlightPlayer, storyPlayer, fullReady=false, queuedStart=null, apiRequested=false, chapterTimer=null;
     function activeChapter(time) {
       let selected = null;
       chapterButtons.forEach(b => {if(time >= Number(b.dataset.start)) selected=b;});
@@ -1439,14 +1473,24 @@
       filmStatus.textContent="재생되지 않으면 영상의 재생 버튼을 눌러 주세요.";
     }
     window.onYouTubeIframeAPIReady = () => {
+      storyPlayer=new YT.Player("storyPlayer", {events:{onStateChange:e=>{
+        if(e.data===1) {
+          if(highlightPlayer && typeof highlightPlayer.pauseVideo === "function") highlightPlayer.pauseVideo();
+          if(fullReady) fullPlayer.pauseVideo();
+        }
+      }}});
       highlightPlayer=new YT.Player("highlightPlayer", {events:{onStateChange:e=>{
-        if(e.data===1 && fullReady) fullPlayer.pauseVideo();
+        if(e.data===1) {
+          if(storyPlayer && typeof storyPlayer.pauseVideo === "function") storyPlayer.pauseVideo();
+          if(fullReady) fullPlayer.pauseVideo();
+        }
       }}});
       fullPlayer=new YT.Player("fullFilmPlayer", {events:{
         onReady:()=>{fullReady=true; if(queuedStart!==null) {jumpTo(queuedStart); queuedStart=null;}},
         onStateChange:e=>{
           clearInterval(chapterTimer);
           if(e.data===1) {
+            if(storyPlayer && typeof storyPlayer.pauseVideo === "function") storyPlayer.pauseVideo();
             if(highlightPlayer && typeof highlightPlayer.pauseVideo === "function") highlightPlayer.pauseVideo();
             filmStatus.textContent="아래 장면을 누르면 해당 시점으로 이동합니다.";
             chapterTimer=setInterval(()=>activeChapter(fullPlayer.getCurrentTime()),500);
@@ -1460,7 +1504,7 @@
     function loadPlayerAPI() {
       if(apiRequested) return;
       apiRequested=true;
-      [$("#highlightPlayer"),$("#fullFilmPlayer")].forEach(frame=>{
+      [$("#storyPlayer"),$("#highlightPlayer"),$("#fullFilmPlayer")].forEach(frame=>{
         frame.loading="eager";
         const url=new URL(frame.src);
         if(location.protocol !== "file:") url.searchParams.set("origin",location.origin);
