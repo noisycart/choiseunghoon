@@ -185,6 +185,7 @@
     }
 
     #gallery,
+    #preWedding,
     #storyFilm,
     #highlightFilm,
     #fullFilm {
@@ -229,6 +230,10 @@
       height: 100%;
       border: 0;
       display: block;
+    }
+
+    #highlightFilm {
+      margin-top: 72px;
     }
 
     .gallery-wrap {
@@ -471,6 +476,9 @@
         font-size: 11.5px;
         white-space: nowrap;
       }
+      .hero-actions a:last-child {
+        grid-column: 1 / -1;
+      }
       .hero-action-icon {
         width: 14px;
         height: 14px;
@@ -481,6 +489,9 @@
         width: min(100% - 16px, 1100px);
         margin-top: 0;
         margin-bottom: 54px;
+      }
+      #highlightFilm {
+        margin-top: 56px;
       }
       .video-section h2 {
         margin-bottom: 18px;
@@ -521,10 +532,19 @@
     .intro-subtitle, .film-desc { word-break:keep-all; }
     .gallery-wrap { padding-bottom:0; }
     .full-film-section { margin-top:72px; }
-    #gallery, #storyFilm, #highlightFilm, #fullFilm { scroll-margin-top:88px; }
-    .gallery-title { text-align: center; font-family: Georgia, "Times New Roman", serif; font-size: clamp(27px, 3vw, 39px); font-weight: 500; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 24px; }
-    .gallery-title span { font:12px sans-serif; color:var(--muted); margin-left:8px; }
-    .section-nav { position:fixed; z-index:30; top:12px; left:50%; transform:translateX(-50%); display:flex; width:max-content; max-width:calc(100% - 24px); padding:4px; gap:2px; border:1px solid var(--line); border-radius:30px; background:rgba(255,253,249,.96); box-shadow:0 4px 20px #25211d18; }
+    #gallery, #preWedding, #storyFilm, #highlightFilm, #fullFilm { scroll-margin-top:88px; }
+    .gallery-title {
+      margin: 0;
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(27px, 3vw, 39px);
+      font-weight: 500;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+      text-align: center;
+    }
+    .section-nav { position:fixed; z-index:30; top:12px; left:50%; transform:translateX(-50%); display:flex; width:max-content; max-width:calc(100% - 24px); padding:4px; gap:2px; border:1px solid var(--line); border-radius:30px; background:rgba(255,253,249,.96); box-shadow:0 4px 20px #25211d18; overflow-x:auto; scrollbar-width:none; }
+    .section-nav::-webkit-scrollbar { display:none; }
     .section-nav[hidden] { display:none; }
     .section-nav a { display:flex; align-items:center; justify-content:center; gap:5px; min-height:44px; padding:0 14px; color:var(--text); text-decoration:none; border-radius:24px; font-size:12px; white-space:nowrap; }
     .section-nav a[aria-current] { background:var(--text); color:var(--paper); }
@@ -541,7 +561,9 @@
     @media(max-width:700px) {
       .hero-actions a { font-size:12px; }
       .full-film-section { margin-top:56px; }
-      .section-nav a { padding:0 7px; font-size:11px; }
+      .section-nav { width:calc(100% - 24px); }
+      .section-nav a { flex:0 0 auto; padding:0 7px; font-size:11px; }
+      .section-nav a:last-child { grid-column:auto; }
     }
     @media(prefers-reduced-motion:reduce) {
       html { scroll-behavior:auto; }
@@ -563,6 +585,15 @@
             <path d="M8 9.5h8M8 12h8M8 14.5h5"></path>
           </svg>
           <span>우리 이야기</span>
+        </a>
+
+        <a href="#preWedding">
+          <svg class="hero-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect>
+            <circle cx="9" cy="9" r="1.5" class="icon-fill"></circle>
+            <path d="M5.5 17l4.5-4.5 3 3 2.5-2.5 3 4"></path>
+          </svg>
+          <span>프리웨딩</span>
         </a>
 
         <a href="#highlightFilm">
@@ -621,6 +652,16 @@
     </p>
   </section>
 
+  <section class="gallery-wrap" id="preWedding" aria-labelledby="preWeddingTitle">
+    <div class="video-label">PRE-WEDDING</div>
+    <h2 class="gallery-title" id="preWeddingTitle">결혼을 준비하며</h2>
+    <p class="film-desc">
+      결혼식을 앞두고 스튜디오에서 남긴 28장의 사진입니다.
+    </p>
+    <div class="gallery" id="preWeddingGrid"></div>
+    <div class="empty" id="preWeddingEmpty" hidden>표시할 프리웨딩 사진이 없습니다.</div>
+  </section>
+
   <section class="video-section" id="highlightFilm" aria-labelledby="weddingFilmTitle">
     <div class="video-label">WEDDING HIGHLIGHT</div>
     <h2 id="weddingFilmTitle">99초로 보는 그날</h2>
@@ -637,6 +678,9 @@
         allowfullscreen>
       </iframe>
     </div>
+    <p class="film-help">
+      <a class="film-fallback" href="https://www.youtube.com/watch?v=vJl_sjXUn14" target="_blank" rel="noopener">YouTube에서 보기 ↗</a>
+    </p>
   </section>
 
   <main class="gallery-wrap" id="gallery" aria-labelledby="galleryTitle">
@@ -645,7 +689,6 @@
     <p class="film-desc">
       2026년 5월 25일, 그날의 순간을 71장의 사진으로 담았습니다.
     </p>
-
     <div class="gallery" id="galleryGrid"></div>
     <div class="empty" id="emptyState" hidden>표시할 사진이 없습니다.</div>
   </main>
@@ -1233,6 +1276,48 @@
 
     const $ = (s) => document.querySelector(s);
     const photos = ALBUM_DATA.photos || [];
+    let preweddingPhotos = [];
+
+    function preweddingFallback() {
+      return Array.from({length: 28}, (_, i) => {
+        const stem = `photo_${String(i + 1).padStart(3, "0")}`;
+        return {
+          full: `images/prewedding/full/${stem}.webp`,
+          thumb: `images/prewedding/thumb/${stem}.webp`,
+          alt: ""
+        };
+      });
+    }
+
+    async function loadPreweddingManifest() {
+      try {
+        const response = await fetch(
+          "images/prewedding/prewedding_manifest.json",
+          { cache: "no-cache" }
+        );
+
+        if (!response.ok) {
+          throw new Error(`manifest HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!Array.isArray(data) || !data.length) {
+          throw new Error("manifest가 비어 있습니다.");
+        }
+
+        return data;
+      } catch (error) {
+        console.warn(
+          "프리웨딩 manifest를 읽지 못해 이미지 자체 크기로 배치합니다.",
+          error
+        );
+        return preweddingFallback();
+      }
+    }
+
+    let activePhotos = photos;
+    let activePhotoLabel = "결혼식";
     let current = 0;
     let touchStartX = null;
 
@@ -1262,38 +1347,74 @@
     if (photos.length) {
       const heroPhoto = "images/full/photo_052.webp";
       $(".hero").style.backgroundImage = `url("${heroPhoto}")`;
+    }
+
+    function renderGallery(gallerySelector, emptySelector, dataset, label, eagerCount = 4) {
+      const gallery = $(gallerySelector);
+      const empty = $(emptySelector);
+      if (!gallery) return;
+
+      if (!dataset.length) {
+        if (empty) empty.hidden = false;
+        return;
+      }
 
       const frag = document.createDocumentFragment();
-      photos.forEach((p, i) => {
+
+      dataset.forEach((p, i) => {
         const item = document.createElement("div");
         item.className = "photo";
         item.tabIndex = 0;
         item.dataset.index = i;
         item.dataset.ratio = (p.width && p.height) ? (p.width / p.height) : 1.5;
         item.setAttribute("role", "button");
-        item.setAttribute("aria-label", `${i + 1}번째 사진 크게 보기`);
+        item.setAttribute("aria-label", `${label} 사진 ${i + 1} 크게 보기`);
 
         const img = document.createElement("img");
         img.src = p.thumb || p.full;
         img.alt = p.alt || "";
-        img.loading = i < 8 ? "eager" : "lazy";
+        img.loading = i < eagerCount ? "eager" : "lazy";
         img.decoding = "async";
 
+        if (!(p.width && p.height)) {
+          img.addEventListener("load", () => {
+            if (img.naturalWidth && img.naturalHeight) {
+              item.dataset.ratio = img.naturalWidth / img.naturalHeight;
+              scheduleGalleryLayout();
+            }
+          }, {once: true});
+        }
+
         item.appendChild(img);
-        item.addEventListener("click", () => openLightbox(i));
+        item.addEventListener("click", () => openLightbox(i, dataset, label));
         item.addEventListener("keydown", e => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            openLightbox(i);
+            openLightbox(i, dataset, label);
           }
         });
         frag.appendChild(item);
       });
-      $("#galleryGrid").appendChild(frag);
 
-      requestAnimationFrame(layoutJustifiedGallery);
-    } else {
-      $("#emptyState").hidden = false;
+      gallery.appendChild(frag);
+    }
+
+    renderGallery("#galleryGrid", "#emptyState", photos, "결혼식", 8);
+
+    async function initPreweddingGallery() {
+      preweddingPhotos = await loadPreweddingManifest();
+
+      renderGallery(
+        "#preWeddingGrid",
+        "#preWeddingEmpty",
+        preweddingPhotos,
+        "프리웨딩",
+        6
+      );
+
+      requestAnimationFrame(() => {
+        layoutJustifiedGallery("#preWeddingGrid");
+      });
     }
 
     function getGallerySettings() {
@@ -1303,9 +1424,9 @@
       return { targetHeight: 260, gap: 12 };
     }
 
-    function layoutJustifiedGallery() {
-      const gallery = $("#galleryGrid");
-      if (!gallery || !photos.length) return;
+    function layoutJustifiedGallery(gallerySelector) {
+      const gallery = $(gallerySelector);
+      if (!gallery || !gallery.children.length) return;
 
       const items = [...gallery.children];
       const containerWidth = gallery.clientWidth;
@@ -1328,7 +1449,6 @@
         const gapsWidth = gap * (rowItems.length - 1);
         let rowHeight = (containerWidth - gapsWidth) / sum;
 
-        // 마지막 행은 사진 수가 적을 때만 왼쪽 정렬한다.
         if (isLast && rowHeight > targetHeight * 1.18) {
           rowHeight = targetHeight;
         }
@@ -1360,11 +1480,22 @@
       });
     }
 
-    let galleryResizeTimer = null;
-    window.addEventListener("resize", () => {
-      clearTimeout(galleryResizeTimer);
-      galleryResizeTimer = setTimeout(layoutJustifiedGallery, 100);
+    let galleryLayoutTimer = null;
+    function scheduleGalleryLayout() {
+      clearTimeout(galleryLayoutTimer);
+      galleryLayoutTimer = setTimeout(() => {
+        layoutJustifiedGallery("#preWeddingGrid");
+        layoutJustifiedGallery("#galleryGrid");
+      }, 40);
+    }
+
+    requestAnimationFrame(() => {
+      layoutJustifiedGallery("#galleryGrid");
     });
+
+    initPreweddingGallery();
+
+    window.addEventListener("resize", scheduleGalleryLayout);
 
     const lightbox = $("#lightbox");
     const lbImage = $("#lbImage");
@@ -1372,34 +1503,45 @@
     const lbRetry = $("#lbRetry");
     let returnFocus = null;
     let imageRequest = 0;
+
     function showAt(i) {
-      if (!photos.length) return;
-      current = (i + photos.length) % photos.length;
-      const p = photos[current], request = ++imageRequest;
+      if (!activePhotos.length) return;
+
+      current = (i + activePhotos.length) % activePhotos.length;
+      const p = activePhotos[current], request = ++imageRequest;
+
       lbImage.style.visibility = "hidden";
       lbStatus.textContent = "사진을 불러오는 중입니다…";
       lbRetry.hidden = true;
-      $("#lbCount").textContent = `${current + 1} / ${photos.length}`;
+      $("#lbCount").textContent = `${current + 1} / ${activePhotos.length}`;
+
       const loader = new Image();
       loader.onload = () => {
         if (request !== imageRequest) return;
+
         lbImage.src = p.full;
-        lbImage.alt = p.alt || `결혼식 사진 ${current + 1}, 전체 ${photos.length}장`;
+        lbImage.alt = p.alt || `${activePhotoLabel} 사진 ${current + 1}, 전체 ${activePhotos.length}장`;
         lbImage.style.visibility = "visible";
         lbStatus.textContent = "";
+
         [current - 1, current + 1].forEach(j => {
           const preload = new Image();
-          preload.src = photos[(j + photos.length) % photos.length].full;
+          preload.src = activePhotos[(j + activePhotos.length) % activePhotos.length].full;
         });
       };
+
       loader.onerror = () => {
         if (request !== imageRequest) return;
         lbStatus.textContent = "사진을 불러오지 못했습니다.";
         lbRetry.hidden = false;
       };
+
       loader.src = p.full;
     }
-    function openLightbox(i) {
+
+    function openLightbox(i, dataset = photos, label = "결혼식") {
+      activePhotos = dataset;
+      activePhotoLabel = label;
       returnFocus = document.activeElement;
       showAt(i);
       lightbox.classList.add("open");
@@ -1407,7 +1549,9 @@
       document.body.classList.add("no-scroll");
       $("#lbClose").focus();
     }
+
     function closeLightbox() { lightbox.close(); }
+
     lightbox.addEventListener("close", () => {
       ++imageRequest;
       lightbox.classList.remove("open");
@@ -1415,38 +1559,56 @@
       lbImage.removeAttribute("src");
       returnFocus?.focus({preventScroll:true});
     });
+
     $("#lbClose").addEventListener("click", closeLightbox);
     $("#lbPrev").addEventListener("click", () => showAt(current - 1));
     $("#lbNext").addEventListener("click", () => showAt(current + 1));
     lbRetry.addEventListener("click", () => showAt(current));
     lightbox.addEventListener("click", e => { if(e.target === lightbox) closeLightbox(); });
+
     lightbox.addEventListener("keydown", e => {
       if(e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        e.preventDefault(); showAt(current + (e.key === "ArrowRight" ? 1 : -1));
+        e.preventDefault();
+        showAt(current + (e.key === "ArrowRight" ? 1 : -1));
       }
       if(e.key === "Tab") {
         const buttons = [...lightbox.querySelectorAll("button")].filter(b => !b.hidden);
         const first = buttons[0], last = buttons[buttons.length - 1];
-        if(e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if(!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        if(e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if(!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     });
+
     let touchStartY = null;
     lightbox.addEventListener("touchstart", e => {
-      if(e.touches.length !== 1 || e.target.closest("button")) { touchStartX = null; return; }
-      touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY;
+      if(e.touches.length !== 1 || e.target.closest("button")) {
+        touchStartX = null;
+        return;
+      }
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
     }, {passive:true});
+
     lightbox.addEventListener("touchend", e => {
       if(touchStartX === null) return;
-      const dx=e.changedTouches[0].clientX-touchStartX, dy=e.changedTouches[0].clientY-touchStartY;
-      if(Math.abs(dx)>50 && Math.abs(dx)>Math.abs(dy)*1.5) showAt(current+(dx<0?1:-1));
-      touchStartX=null;
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        showAt(current + (dx < 0 ? 1 : -1));
+      }
+      touchStartX = null;
     }, {passive:true});
-    lightbox.addEventListener("touchcancel", () => {touchStartX=null;});
+
+    lightbox.addEventListener("touchcancel", () => { touchStartX = null; });
 
     const sectionNav = $("#sectionNav");
     sectionNav.innerHTML = $(".hero-actions").innerHTML;
-    const sections = [$("#storyFilm"), $("#highlightFilm"), $("#gallery"), $("#fullFilm")];
+    const sections = [$("#storyFilm"), $("#preWedding"), $("#highlightFilm"), $("#gallery"), $("#fullFilm")];
     let scrollPending = false;
     function updateNav() {
       sectionNav.hidden = $(".hero").getBoundingClientRect().bottom > 0;
