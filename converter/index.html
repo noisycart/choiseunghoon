@@ -697,6 +697,17 @@ function formatYonhapNumbers(t){
       $('#stats').textContent = `전처리 문장 수(인용부 제외): ${origSent} | 결과 줄 수: ${outLines} | 처리: ${ms}ms | 폭: ${wrapWidth}자`;
     });
 
+      // 변환 결과를 클립보드에 자동 복사
+      if (out && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(out)
+          .then(() => {
+            $('#stats').textContent += ' | 자동 복사 완료';
+          })
+          .catch(() => {
+            $('#stats').textContent += ' | 자동 복사 실패';
+          });
+      }
+
     // 복사
     $('#btnCopy').addEventListener('click', async () => {
       const text = $('#outputText').value || '';
