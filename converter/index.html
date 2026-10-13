@@ -47,6 +47,27 @@
     button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
     .footer { color:var(--muted); font-size:12px; margin-top:6px; }
 
+    #copyStatus {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    
+    #copyStatus[data-state="success"] {
+      color: #137547;
+    }
+    
+    #copyStatus[data-state="error"] {
+      color: #b42318;
+    }
+    
+    body.dark #copyStatus[data-state="success"] {
+      color: #7ee2a7;
+    }
+    
+    body.dark #copyStatus[data-state="error"] {
+      color: #ffa8a8;
+    }
+
     @media (max-width: 900px) {
       .row { grid-template-columns: 1fr; height: calc(100vh - 24px*2 - 28px); }
       .controls-right { justify-content: flex-start; }
@@ -77,8 +98,10 @@
         </span>
       </div>
 
+
       <div class="controls-left">
-        <button class="primary" id="btnConvert">변환</button>
+        <button class="primary" id="btnConvert">변환하고 복사</button>
+        <span id="copyStatus" role="status" aria-live="polite"></span>
         <div class="footer" id="stats"></div>
       </div>
     </div>
@@ -88,7 +111,7 @@
       <label for="outputText">변환 결과</label>
       <textarea id="outputText" readonly placeholder="여기에 변환 결과가 표시됩니다."></textarea>
       <div class="controls-right">
-        <button id="btnCopy">복사</button>
+        <button id="btnCopy">다시 복사</button>
         <button id="btnClear">지우기</button>
       </div>
     </div>
@@ -678,6 +701,10 @@ function formatYonhapNumbers(t){
 
     // 변환
     $('#btnConvert').addEventListener('click', () => {
+      const status = $('#copyStatus');
+      status.textContent = '';
+      status.removeAttribute('data-state');
+
       const raw = $('#inputText').value || '';
       const cleanHeaders = $('#optCleanHeaders').checked;
       const cutBoiler = $('#optCutBoiler').checked;
@@ -694,31 +721,59 @@ function formatYonhapNumbers(t){
       const { masked } = maskQuotes(base);
       const origSent = splitSentences(masked).length;
       const outLines = out.split('\n').length;
+
       $('#stats').textContent = `전처리 문장 수(인용부 제외): ${origSent} | 결과 줄 수: ${outLines} | 처리: ${ms}ms | 폭: ${wrapWidth}자`;
 
-      // 변환 결과를 클립보드에 자동 복사
-      if (out && navigator.clipboard?.writeText) {
+      if (!out) {
+        status.dataset.state = 'error';
+        status.textContent = '변환할 내용이 없습니다.';
+      } else if (!navigator.clipboard?.writeText) {
+        status.dataset.state = 'error';
+        status.textContent = '자동 복사 불가 · 다시 복사를 눌러주세요.';
+      } else {
+        status.textContent = '클립보드에 복사 중…';
+
         navigator.clipboard.writeText(out)
           .then(() => {
-            $('#stats').textContent += ' | 자동 복사 완료';
+            status.dataset.state = 'success';
+            status.textContent = '✓ 복사 완료! Ctrl+V로 붙여넣으세요.';
           })
           .catch(() => {
-            $('#stats').textContent += ' | 자동 복사 실패';
+            status.dataset.state = 'error';
+            status.textContent = '복사 실패 · 다시 복사를 눌러주세요.';
           });
       }
     });
-    
-    // 복사
+
+    // 다시 복사
     $('#btnCopy').addEventListener('click', async () => {
       const text = $('#outputText').value || '';
+      const status = $('#copyStatus');
+
+      if (!text) {
+        status.dataset.state = 'error';
+        status.textContent = '복사할 결과가 없습니다.';
+        return;
+      }
+
       try {
-        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
-        else {
-          const ta = $('#outputText'); ta.removeAttribute('readonly'); ta.select();
-          document.execCommand('copy'); ta.setAttribute('readonly','readonly');
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = $('#outputText');
+          ta.removeAttribute('readonly');
+          ta.select();
+          const copied = document.execCommand('copy');
+          ta.setAttribute('readonly', 'readonly');
+          if (!copied) throw new Error('Copy failed');
         }
-        alert('텍스트가 복사되었습니다!');
-      } catch { alert('복사에 실패했습니다. 수동으로 복사해주세요.'); }
+
+        status.dataset.state = 'success';
+        status.textContent = '✓ 복사 완료! Ctrl+V로 붙여넣으세요.';
+      } catch {
+        status.dataset.state = 'error';
+        status.textContent = '복사 실패 · 텍스트를 직접 선택해 복사해주세요.';
+      }
     });
 
     // 지우기
@@ -726,6 +781,8 @@ function formatYonhapNumbers(t){
       $('#inputText').value = '';
       $('#outputText').value = '';
       $('#stats').textContent = '';
+      $('#copyStatus').textContent = '';
+      $('#copyStatus').removeAttribute('data-state');
       $('#inputText').focus();
     });
 
