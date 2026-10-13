@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>연합뉴스 → SBS 단신체 변환기 v2.3</title>
+  <style>
+    :root { --bg:#ffffff; --fg:#222; --muted:#666; --accent:#0b5fff; --border:#e6e6e6; }
+    body.dark { --bg:#111318; --fg:#e8eaed; --muted:#a4a7ae; --accent:#4c8dff; --border:#2a2d36; }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+      color:var(--fg); background:var(--bg); margin:0; padding:24px;
+      display:flex; flex-direction:column; gap:12px;
+    }
+    h1 { margin:0; font-size:20px; display:flex; justify-content:space-between; align-items:center; }
+    label { font-weight:600; display:block; margin:10px 0 8px; }
+    .row {
+      display:grid; grid-template-columns: 1fr 1fr; gap:16px;
+      height: calc(100vh - 24px*2 - 28px);
+      min-height: 520px;
+    }
+    .col { display:flex; flex-direction:column; min-width:0; }
+    textarea {
+      width:100%; flex:1 1 auto; min-height:0;
+      padding:12px 14px; font-size:15px; line-height:1.6;
+      border:1px solid var(--border); border-radius:10px; background:#fff; resize:vertical; color:#111;
+    }
+    body.dark textarea { background:#161a21; color:#e8eaed; border-color:var(--border); }
+
+    .options { display:flex; flex-wrap:wrap; gap:14px; font-size:14px; color:var(--muted); margin:8px 0; align-items:center; }
+    .options label { font-weight:500; display:inline-flex; align-items:center; gap:6px; margin:0;}
+    .wrap-group { display:inline-flex; gap:6px; align-items:center; }
+    input[type="number"] { width:72px; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--fg); }
+
+    .controls-left, .controls-right { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .controls-left { justify-content:flex-start; align-items:center; }
+    .controls-right { justify-content:flex-end; }
+    button {
+      appearance:none; border:1px solid var(--border); background:#fff; color:#111;
+      padding:10px 14px; font-size:15px; border-radius:10px; cursor:pointer;
+    }
+    body.dark button { background:#1f2530; color:#e8eaed; border-color:var(--border); }
+    button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .footer { color:var(--muted); font-size:12px; margin-top:6px; }
+
+    @media (max-width: 900px) {
+      .row { grid-template-columns: 1fr; height: calc(100vh - 24px*2 - 28px); }
+      .controls-right { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <h1>
+    연합뉴스 → SBS 단신체 변환기 v2.3
+    <button id="btnDark" title="다크 모드 토글">다크 모드</button>
+  </h1>
+
+  <div class="row">
+    <!-- 왼쪽: 입력 + 옵션 + 변환 버튼 -->
+    <div class="col">
+      <label for="inputText">원문 입력</label>
+      <textarea id="inputText" placeholder="연합뉴스 원문을 그대로 붙여넣으세요."></textarea>
+
+      <div class="options">
+        <label><input type="checkbox" id="optCleanHeaders" checked /> 바이라인/캡션/이메일 정리</label>
+        <label><input type="checkbox" id="optCutBoiler" checked /> 홍보/저작권/(끝) 등 꼬리표 절단</label>
+        <label><input type="checkbox" id="optSentenceNewline" checked /> 문장마다 줄바꿈(인용부 제외)</label>
+        <span class="wrap-group">
+          <label style="font-weight:500; margin:0;"><input type="checkbox" id="optHardWrap" checked /> 강제 줄바꿈</label>
+          <span>폭</span>
+          <input type="number" id="wrapWidth" min="10" max="80" step="1" value="20" />
+          <span>자</span>
+        </span>
+      </div>
+
+      <div class="controls-left">
+        <button class="primary" id="btnConvert">변환</button>
+        <div class="footer" id="stats"></div>
+      </div>
+    </div>
+
+    <!-- 오른쪽: 결과 + 복사/지우기 버튼 -->
+    <div class="col">
+      <label for="outputText">변환 결과</label>
+      <textarea id="outputText" readonly placeholder="여기에 변환 결과가 표시됩니다."></textarea>
+      <div class="controls-right">
+        <button id="btnCopy">복사</button>
+        <button id="btnClear">지우기</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== 자모 유틸 ======
+    const BASE = 0xAC00, CHO = 19, JUNG = 21, JONG = 28;
+    const JONG_NONE = 0, JONG_RIEUL = 8, JONG_BIEUP = 17, JONG_SSANGSIOT = 20; // ㄹ, ㅂ, ㅆ
+    const politeStrictRe = /(입니다\.|습니다\.)$/;
+
+    const $ = sel => document.querySelector(sel);
+    const isHangulSyll = ch => {
+      if (!ch) return false;
+      const c = ch.codePointAt(0);
+      return c >= 0xAC00 && c <= 0xD7A3;
+    };
+    function decompose(ch){
+      const code = ch.codePointAt(0) - BASE;
+      const jong = code % JONG;
+      const jung = ((code - jong) / JONG) % JUNG;
+      const cho  = Math.floor(code / (JUNG * JONG));
+      return {cho, jung, jong};
+    }
+    function compose({cho, jung, jong}){
+      return String.fromCharCode(BASE + (cho*JUNG + jung)*JONG + jong);
+    }
+    function attachPolite(stem){
+      // 동사·형용사 어간의 마지막 글자만 활용합니다.
+      // 이전 버전처럼 뒤에서부터 한글을 찾으면
+      // "100%(잠정)"의 괄호 안 글자를 바꾸는 오작동이 생길 수 있습니다.
+      const ch = stem[stem.length - 1];
+      if (!isHangulSyll(ch)) return stem + '습니다.';
+
+      const dj = decompose(ch);
+
+      // 받침이 없으면 -ㅂ니다: 가다→갑니다, 크다→큽니다
+      // ㄹ 받침도 -ㅂ니다 앞에서 ㄹ이 탈락: 살다→삽니다, 만들다→만듭니다
+      if (dj.jong === JONG_NONE || dj.jong === JONG_RIEUL) {
+        const newCh = compose({cho: dj.cho, jung: dj.jung, jong: JONG_BIEUP});
+        return stem.slice(0, -1) + newCh + '니다.';
+      }
+      return stem + '습니다.';
+    }
+
+    // ====== 인용부 마스킹/복원 ======
+    function maskQuotes(text){
+      // 곧은 작은따옴표(')는 영문 아포스트로피와 구분해야 하므로
+      // 일반 인용부와 분리해 처리합니다.
+      const pairs = [
+        ['"', '"'], ['“','”'], ['‘','’'], ['「','」'], ['『','』']
+      ];
+      let masked = text;
+      const placeholders = [];
+
+      const storeQuote = (value) => {
+        const key = `__Q${placeholders.length}__`;
+        placeholders.push({ key, value });
+        return key;
+      };
+
+      for (const [o,c] of pairs){
+        const re = new RegExp(`${escapeReg(o)}[\\s\\S]*?${escapeReg(c)}`, 'g');
+        masked = masked.replace(re, (m) => storeQuote(m));
+      }
+
+      // Collector's, McDonald's, O'Connor처럼 영문자 사이의 '는
+      // 닫는 따옴표로 인정하지 않습니다.
+      // 앞 문자를 함께 잡았다가 그대로 돌려줘 lookbehind 없이도 동작합니다.
+      const straightSingleQuoteRe = /(^|[^A-Za-z0-9])'([\s\S]*?)'(?![A-Za-z0-9])/g;
+      masked = masked.replace(straightSingleQuoteRe, (_, prefix, inner) => {
+        return prefix + storeQuote(`'${inner}'`);
+      });
+
+      return { masked, placeholders };
+    }
+    function unmaskQuotes(text, placeholders){
+      let out = text;
+      for (const {key,value} of placeholders){
+        out = out.replaceAll(key, value);
+      }
+      return out;
+    }
+    function escapeReg(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+    // ====== 공백/단위 정규화 ======
+    function normalizeSpacing(t){
+      return t
+        // 전각·유사 기호를 일반 기호로 통일
+        .replace(/％/g, '%')
+        .replace(/[∼～]/g, '~')
+        // 숫자+단위 붙이기. 기호 단위 뒤에서는 \b가 작동하지 않으므로 전방 탐색을 사용
+        .replace(/(\d)\s*(㎞|km|㎏|kg|%|℃|℉|㎜|mm|㎝|cm)(?=$|[\s,.;:!?)}\]가-힣])/gi, '$1$2')
+        // 시·분 사이 공백
+        .replace(/(\d)시\s*(\d+)/g, '$1시 $2')
+        .replace(/(\d)분\s*(\d+)/g, '$1분 $2')
+        // 아라비아 숫자로 적은 날짜: 2026.7.12. → 2026. 7. 12.
+        .replace(/(^|[^\d])(\d{4})\s*\.\s*(\d{1,2})\s*\.\s*(\d{1,2})\s*\./g,
+          '$1$2. $3. $4.')
+        // 괄호 안쪽 공백 정리
+        .replace(/\(\s+/g,'(').replace(/\s+\)/g,')')
+        // 범위 물결표는 앞뒤에 붙임
+        .replace(/\s*~\s*/g,'~');
+    }
+
+// ====== 연합뉴스식 숫자 표기 → SBS 스타일 ======
+function formatYonhapNumbers(t){
+  // (1) A천B -> (A*1000 + B) 콤마 처리  (뒤에 숫자가 있을 때만)
+  t = t.replace(/(\d{1,3})천(\d{1,3})/g, (_, a, b) => {
+    const n = parseInt(a, 10) * 1000 + parseInt(b, 10);
+    return n.toLocaleString('en-US'); // 8,538
+  });
+
+  // (2) 조/억/만 뒤에 숫자가 바로 오면 한 칸 띄움
+  t = t.replace(/(조|억|만)(?=\d)/g, '$1 ');
+
+  // (3) 수량 표현의 최종 단위만 분리: 10억원→10억 원, 5천명→5천 명
+  // 숫자 문맥을 반드시 요구해 '천명했다', '만원 버스', '연구 조원'을 훼손하지 않음
+  t = t.replace(
+    /(\d[\d,\s조억만천]*[조억만천])(원|명|달러|유로|엔|위안)/g,
+    (_, numberPart, unit) => `${numberPart.trimEnd()} ${unit}`
+  );
+
+  return t;
+}
+
+    // ====== ‘…께’ → ‘…쯤’ (오전/오후 없이도 동작) ======
+    function aroundKkeToJjeum(t){
+      return t.replace(/(\d{1,2})시(?:\s*(\d{1,2})분(?:\s*(\d{1,2})초)?)?\s*께/g, (_, hh, mm, ss) => {
+        let out = `${hh}시`;
+        if (mm) out += ` ${mm}분`;
+        if (ss) out += ` ${ss}초`;
+        return out + '쯤';
+      });
+    }
+
+    // ====== SBS 라벨: 새벽/아침/오전/낮/오후/저녁/밤 (리드링 제로·분/초·께/쯤 포함) ======
+    function relabelTimeSBS(t){
+      const pickLabel = (h24) => (
+        (h24<=5) ? '새벽' :
+        (h24<=7) ? '아침' :
+        (h24<=11)? '오전' :
+        (h24<=14)? '낮'   :
+        (h24<=17)? '오후' :
+        (h24<=19)? '저녁' : '밤'
+      );
+      const displayHour = (h24) => {
+        if (h24 === 0) return 0;     // 새벽 0시
+        if (h24 === 12) return 12;   // 낮 12시
+        return h24 % 12;
+      };
+
+      // ① 단일 시각: 오전/오후 + 시(선행 0 포함) + [분/초] + [께/쯤]
+      t = t.replace(
+        /(오전|오후)\s*(0?\d|1[0-2])시(?:\s*(\d{1,2})분(?:\s*(\d{1,2})초)?)?(?:\s*(께|쯤))?/g,
+        (_, ap, hh, mm, ss, about) => {
+          let h = parseInt(hh, 10);
+          if (ap === '오전') { if (h === 12) h = 0; }
+          else { if (h !== 12) h += 12; }
+          const label = pickLabel(h);
+          const hDisp = displayHour(h);
+          let out = `${label} ${hDisp}시`;
+          if (mm) out += ` ${mm}분`;
+          if (ss) out += ` ${ss}초`;
+          if (about) out += '쯤'; // '께'든 '쯤'이든 통일해 '쯤'
+          return out;
+        }
+      );
+
+      // ② 범위: "오전 6시~8시" → "아침 6시~8시" 등 (좌측 기준으로 라벨 결정)
+      t = t.replace(
+        /(오전|오후)\s*(0?\d|1[0-2])시~(0?\d|1[0-2])시/g,
+        (_, ap, hh1, hh2) => {
+          let h = parseInt(hh1, 10);
+          if (ap === '오전') { if (h === 12) h = 0; }
+          else { if (h !== 12) h += 12; }
+          const label = pickLabel(h);
+          const hDisp = displayHour(h);
+          return `${label} ${hDisp}시~${parseInt(hh2,10)}시`;
+        }
+      );
+
+      return t;
+    }
+
+    // ====== 전처리 ======
+    function preprocessYonhap(raw, opts) {
+      let t = raw.replace(/\r\n?/g, '\n');
+
+      // 제목~바이라인(OOO 기자 = / OOO 특파원 =)까지 제거 (공백 유무 모두 대응)
+      if (opts.cleanHeaders) {
+        const m = t.match(/^[\s\S]{0,800}?(?:기자|특파원)\s*=\s*/);
+        if (m) t = t.slice(m[0].length);
+      }
+
+      if (opts.cleanHeaders) {
+        t = t.replace(/^\s*\([\w가-힣·\s]+=\s*연합뉴스\)\s*/m, '');
+        t = t.replace(/\((?:사진|영상|자료사진|연합|연합뉴스)[^)]*\)\s*/g, '');
+        t = t.replace(/\s*\[(?:속보|1보|2보|3보)\]\s*/g, '')
+             .replace(/\s*\((?:종합|사진취재|영상)\)\s*/g, '');
+        t = t.replace(/\b[\w.%+-]+@yna\.co\.kr\b/g, '');
+      }
+
+      if (opts.cutBoiler) {
+        t = t.replace(/\n?\(끝\)\s*$/m, '');
+        const idx1 = t.search(/^\s*<\s*연합뉴스/mi);
+        const idx2 = t.search(/^\s*<\s*저작권자/mi);
+        const cutIdx = (idx1 === -1) ? idx2 : (idx2 === -1 ? idx1 : Math.min(idx1, idx2));
+        if (cutIdx !== -1) t = t.slice(0, cutIdx);
+        t = t.replace(/^\s*<[^>\n]*>\s*$/gm, '');
+      }
+
+      t = t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+      // 공백/단위 정규화
+      t = normalizeSpacing(t);
+      // SBS 라벨 치환 (오전 04시, 분/초, ‘…께’ 포함)
+      t = relabelTimeSBS(t);
+      // ‘…께’ → ‘…쯤’ (오전/오후 없이도 적용)
+      t = aroundKkeToJjeum(t);
+
+      return t;
+    }
+
+    // ====== 문장 분리(스캐너) ======
+    const CLOSER_SET = new Set(['”','"','’',"'",'」','』',')',']']);
+    const LATIN_ABBREVIATIONS = new Set([
+      'mr','mrs','ms','dr','prof','sr','jr','st','mt',
+      'inc','ltd','corp','co','no','vol','fig','dept','est',
+      'vs','etc','approx','jan','feb','mar','apr','jun','jul','aug','sep','sept','oct','nov','dec'
+    ]);
+
+    function isDigit(ch){ return /[0-9]/.test(ch); }
+    function isLatinAlpha(ch){ return /[A-Za-z]/.test(ch); }
+
+    function nextNonSpaceIndex(text, start){
+      let i = start;
+      while (i < text.length && /[ \t]/.test(text[i])) i++;
+      return i;
+    }
+
+    // 2026. 7. 12. / 7. 12. 같은 날짜 표기 내부의 마침표인지 판정합니다.
+    // 줄바꿈 뒤에 새 문장이 시작되는 경우까지 무조건 합치지 않도록 같은 줄만 봅니다.
+    function isDateNotationPeriod(text, i){
+      const lineStart = text.lastIndexOf('\n', i - 1) + 1;
+      const nextLineBreak = text.indexOf('\n', i + 1);
+      const lineEnd = nextLineBreak === -1 ? text.length : nextLineBreak;
+      const left = text.slice(lineStart, i + 1);
+      const right = text.slice(i + 1, lineEnd);
+
+      // 연도 뒤: 2026. 7. 12.
+      if (/(?:^|\D)\d{4}\.$/.test(left) && /^\s*\d{1,2}\./.test(right)) return true;
+
+      // 월 뒤: 2026. 7. 12. 또는 7. 12.
+      if (/(?:^|\D)(?:\d{4}\.\s*)?\d{1,2}\.$/.test(left) && /^\s*\d{1,2}\./.test(right)) return true;
+
+      // 일 뒤의 점이 날짜 표기의 일부이고, 같은 줄에서 조사·명사 등이 이어지는 경우
+      // 예: 2026. 7. 12. 기준 / 7. 12.부터
+      if (/(?:^|\D)(?:\d{4}\.\s*)?\d{1,2}\.\s*\d{1,2}\.$/.test(left)) {
+        const j = nextNonSpaceIndex(text, i + 1);
+        if (j < lineEnd && /[가-힣(]/.test(text[j])) return true;
+      }
+
+      return false;
+    }
+
+    function isLatinAbbreviationPeriod(text, i){
+      const left = text.slice(Math.max(0, i - 30), i + 1);
+
+      // U.S. / U.N. / e.g. / i.e.처럼 한 글자와 점이 반복되는 약어
+      if (/(?:^|[^A-Za-z])(?:[A-Za-z]\.){2,}$/.test(left)) return true;
+
+      // Inc. / Co. / vs. 등 자주 쓰이는 영문 약어
+      const m = left.match(/([A-Za-z]+)\.$/);
+      if (!m || !LATIN_ABBREVIATIONS.has(m[1].toLowerCase())) return false;
+
+      // 문서 끝의 약어 마침표는 문장 종결일 수 있으므로 예외에서 제외
+      const j = nextNonSpaceIndex(text, i + 1);
+      return j < text.length && text[j] !== '\n';
+    }
+
+    function isInternalPeriod(text, i){
+      const prev = text[i - 1] || '';
+      const next = text[i + 1] || '';
+
+      // 말줄임표: 마지막 점에서만 문장 종결 여부를 판단
+      if (next === '.') return true;
+
+      // 소수·버전·IP 주소: 3.14 / v2.1 / 192.168.0.1
+      if (isDigit(prev) && isDigit(next)) return true;
+
+      // 영문 약칭·도메인·파일명: M.AX / A.I. / yna.co.kr
+      if (isLatinAlpha(prev) && isLatinAlpha(next)) return true;
+
+      // 마침표 뒤에 공백이나 닫는 기호 없이 문자가 바로 이어지면 토큰 내부로 봄
+      // 예: Inc.는 / No.1 / example.com/path
+      if (next && !/\s/.test(next) && !CLOSER_SET.has(next)) return true;
+
+      if (isDateNotationPeriod(text, i)) return true;
+      if (isLatinAbbreviationPeriod(text, i)) return true;
+
+      return false;
+    }
+
+    function splitSentences(text) {
+      const out = [];
+      let buf = '';
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        buf += ch;
+
+        let end = false;
+
+        if (ch === '.') {
+          end = !isInternalPeriod(text, i);
+        } else if (ch === '?' || ch === '!') {
+          end = true;
+        }
+
+        if (end) {
+          let j = i + 1;
+          while (j < text.length && CLOSER_SET.has(text[j])) {
+            buf += text[j];
+            j++;
+          }
+          i = j - 1;
+
+          const s = buf.trim();
+          if (s) out.push(s);
+          buf = '';
+        }
+      }
+
+      const rest = buf.trim();
+      if (rest) out.push(rest);
+      return out;
+    }
+
+    // ====== 공손체 판정(보강) ======
+    const TRAIL_CLOSERS_RE = /[”"’'」』\)\]]+$/;
+    function endsWithB니다(core){
+      if (!/니다\.$/.test(core)) return false;
+      if (core.length < 4) return false;
+      const prevSyl = core[core.length - 4];
+      return isHangulSyll(prevSyl) && decompose(prevSyl).jong === JONG_BIEUP;
+    }
+    function alreadyPolite(s){
+      const core = s.replace(TRAIL_CLOSERS_RE, '').trim();
+      if (/(입니다\.|습니다\.)$/.test(core)) return true;
+      if (endsWithB니다(core)) return true;
+      return false;
+    }
+
+    // ====== ‘이다’ 축약(명사+다) 판별 ======
+    // 정규식만으로 한국어 품사를 완벽히 판별할 수는 없습니다.
+    // 따라서 ① 숫자·영문·기호·인용부 뒤의 '다'와
+    // ② 기사에서 자주 쓰이는 명사형 종결만 보수적으로 '입니다'로 바꿉니다.
+    const NOUN_DA_ENDINGS = [
+      '상황','현상','입장','방침','기준','결과','가능성','필요성','문제','조치','조처','방법',
+      '방안','원인','대책','과제','요인','사유','사안','제안','안건','비율','추세','흐름','관행','현안',
+      '목표','계획','예정','전망','정책','제도','규제','원칙','핵심','쟁점','관건','대안','후보',
+      '변수','기회','위기','의미','취지','계기','효과','성과','한계','수준','규모','정도','지표','수치','통계',
+      '회사','정부','업체','단체','기관','국가','산업','경제','시장','분야','사례','자료','내용','이유','배경',
+      '목적','대상','주체','최고','최저','최대','최소','대세','하나','첫째','둘째','셋째'
+    ];
+
+    function isNounDa(word){
+      if (!word || !/^[가-힣]+$/.test(word)) return false;
+
+      // '자다', '차다' 같은 동사를 명사로 오인하지 않도록
+      // 단일 음절 접미사는 사용하지 않고 2음절 이상의 명사형 종결만 봅니다.
+      return NOUN_DA_ENDINGS.some(ending => word.endsWith(ending));
+    }
+
+    function isClearlyCopularDaStem(stem){
+      const trimmed = stem.trim();
+      if (!trimmed) return false;
+
+      const token = trimmed.split(/\s+/).pop() || '';
+      const last = token[token.length - 1] || '';
+
+      // '8.5％였다', 'AI였다', '2025년이었다'처럼 숫자·영문·기호가
+      // 들어 있어도 마지막 음절에 ㅆ 받침이 있으면 과거·추정 활용형입니다.
+      // 이를 명사+다로 오인하면 '였입니다', '이었입니다'가 됩니다.
+      if (isHangulSyll(last) && decompose(last).jong === JONG_SSANGSIOT) {
+        return false;
+      }
+
+      // 100%, AI, A/B, 1위, 20℃, __Q0__, (잠정)처럼
+      // 활용형이 아닌 상태에서 마지막 어절에 한글 이외 문자가 있으면
+      // 명사·수치 표현으로 봅니다.
+      if (/[^가-힣]/.test(token)) return true;
+
+      return isNounDa(token);
+    }
+
+    // ====== 어말 변환 ======
+    function toPolite(sentence){
+      if (alreadyPolite(sentence)) return sentence;
+
+      let closers = '';
+      const m = sentence.match(TRAIL_CLOSERS_RE);
+      if (m) { closers = m[0]; sentence = sentence.slice(0, -closers.length); }
+      let s = sentence.trim();
+
+      const BEFORE = s;
+      s = s.replace(/이다\.$/, '입니다.')
+           .replace(/아니다\.$/, '아닙니다.')
+           .replace(/(이에요|예요)\.$/, '입니다.')
+           .replace(/하였다\.$/, '했습니다.')
+           .replace(/했다\.$/, '했습니다.')
+           // 서술격 조사와 일반 용언의 과거형. 이 규칙을 명사+다 판정보다 먼저 적용합니다.
+           .replace(/아니었다\.$/, '아니었습니다.')
+           .replace(/이었다\.$/, '이었습니다.')
+           .replace(/였다\.$/, '였습니다.')
+           .replace(/한다\.$/, '합니다.')
+           .replace(/해요\.$/, '합니다.')
+           .replace(/돼요\.$/, '됩니다.')
+           .replace(/했어요\.$/, '했습니다.')
+           .replace(/됐어요\.$/, '됐습니다.')
+           .replace(/있어요\.$/, '있습니다.')
+           .replace(/없어요\.$/, '없습니다.')
+           .replace(/않아요\.$/, '않습니다.')
+           .replace(/된다\.$/, '됩니다.')
+           .replace(/되었다\.$/, '되었습니다.')
+           .replace(/됐다\.$/, '됐습니다.')
+           .replace(/밝혔다\.$/, '밝혔습니다.')
+           .replace(/전했다\.$/, '전했습니다.')
+           .replace(/설명했다\.$/, '설명했습니다.')
+           .replace(/강조했다\.$/, '강조했습니다.')
+           .replace(/지적했다\.$/, '지적했습니다.')
+           .replace(/덧붙였다\.$/, '덧붙였습니다.')
+           .replace(/발표했다\.$/, '발표했습니다.')
+           .replace(/확인했다\.$/, '확인했습니다.')
+           .replace(/분석했다\.$/, '분석했습니다.')
+           .replace(/제시했다\.$/, '제시했습니다.')
+           .replace(/발생했다\.$/, '발생했습니다.')
+           .replace(/퍼졌다\.$/, '퍼졌습니다.')
+           .replace(/있다\.$/, '있습니다.')
+           .replace(/없다\.$/, '없습니다.')
+           .replace(/보인다\.$/, '보입니다.')
+           .replace(/예상된다\.$/, '예상됩니다.')
+           .replace(/전망된다\.$/, '전망됩니다.')
+           .replace(/우려된다\.$/, '우려됩니다.')
+           .replace(/관측된다\.$/, '관측됩니다.')
+           .replace(/분석된다\.$/, '분석됩니다.')
+           .replace(/밝혀졌다\.$/, '밝혀졌습니다.')
+           .replace(/확인됐다\.$/, '확인됐습니다.')
+           .replace(/조사됐다\.$/, '조사됐습니다.')
+           .replace(/나타났다\.$/, '나타났습니다.')
+           .replace(/드러났다\.$/, '드러났습니다.')
+           .replace(/중이다\.$/, '중입니다.');
+      if (s !== BEFORE) return s + closers;
+
+      // '-까.'는 의문의 강도와 문맥에 따라 마침표도 허용됩니다.
+      // '-까요.'로 자동 변환하면 해요체가 섞이고 발화 의도가 달라질 수 있으므로 원문을 보존합니다.
+
+      // 부정 현재형
+      if (/않는다\.$/.test(s)) return s.replace(/않는다\.$/, '않습니다.') + closers;
+      s = s.replace(/지 않는다\.$/, '지 않습니다.');
+
+      // 받침 있는 동사의 현재형 ‘…는다.’
+      // 남는다→남습니다, 먹는다→먹습니다, 찾는다→찾습니다
+      if (/는다\.$/.test(s)) {
+        const stem = s.slice(0, -3); // '는다.' 제거
+        return attachPolite(stem) + closers;
+      }
+
+      // 명사·수치·영문·인용부 + 다(=‘이다’ 축약) → …입니다.
+      // 예: 100%다. / AI다. / 1위다. / '핵심'다. / 목표다.
+      const copularDa = s.match(/^(.*)다\.$/);
+      if (copularDa && isClearlyCopularDaStem(copularDa[1])) {
+        return copularDa[1] + '입니다.' + closers;
+      }
+
+      // 현재형 ‘…ㄴ다.’
+      // 간다→갑니다, 늘어난다→늘어납니다
+      // 문장 앞부분에 줄바꿈이 있어도 동작하도록
+      // 문장 끝의 마지막 음절만 검사합니다.
+      const mDa2 = s.match(/([가-힣])다\.$/);
+
+      if (mDa2) {
+        const syl = mDa2[1];
+
+        if (isHangulSyll(syl)) {
+          const dj = decompose(syl);
+
+          if (dj.jong === 4) { // ㄴ 받침
+            const baseSyl = compose({
+              cho: dj.cho,
+              jung: dj.jung,
+              jong: JONG_NONE
+            });
+
+            const stem =
+              s.slice(0, mDa2.index) + baseSyl;
+
+            return attachPolite(stem) + closers;
+          }
+        }
+      }
+
+      // 일반 ‘…다.’ / 하요체 ‘…요.’
+      if (/다\.$/.test(s)) return attachPolite(s.slice(0, -2)) + closers;
+      // 해요체는 활용형이 복잡하므로, 위에서 명시적으로 처리하지 않은 형태는 원문을 보존합니다.
+      // 잘못된 변환(먹어요→먹업니다, 와요→왑니다)보다 미변환이 안전합니다.
+      if (/요\.$/.test(s)) return s + closers;
+
+      return s + closers;
+    }
+
+    // ====== 강제 줄바꿈 ======
+    function hardWrap(text, width) {
+      return text.split(/\n{2,}/).map(par => {
+        const clean = par.replace(/\s+/g, ' ').trim();
+        if (!clean) return '';
+        const words = clean.split(' ');
+        const lines = [];
+        let line = '';
+        for (const w of words) {
+          if (line.length === 0) line = w;
+          else if ((line + ' ' + w).length <= width) line += ' ' + w;
+          else { lines.push(line); line = w; }
+        }
+        if (line) lines.push(line);
+        return lines.join('\n');
+      }).join('\n\n');
+    }
+
+    // ====== 파이프라인 ======
+    function convertPipeline(raw, options) {
+      const { cleanHeaders, cutBoiler, sentenceNewline, hardWrapOn, wrapWidth } = options;
+
+      let t = preprocessYonhap(raw, { cleanHeaders, cutBoiler });
+
+      const { masked, placeholders } = maskQuotes(t);
+      t = masked;
+
+      t = formatYonhapNumbers(t);
+
+      const sentences = splitSentences(t);
+      const converted = sentences.map(s => toPolite(s));
+      let out = sentenceNewline ? converted.join('\n\n') : converted.join(' ');
+
+      out = unmaskQuotes(out, placeholders);
+
+      if (hardWrapOn) out = hardWrap(out, wrapWidth);
+
+      out = out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      return out;
+    }
+
+    // ====== UI ======
+    // 테마 복원
+    (function initTheme() {
+      const savedTheme = localStorage.getItem('yn_theme');
+      if (savedTheme === 'dark') document.body.classList.add('dark');
+    })();
+
+    // 옵션 복원
+    (function restoreOptions(){
+      const saved = JSON.parse(localStorage.getItem('yn_sbs_opts')||'{}');
+      ['optCleanHeaders','optCutBoiler','optSentenceNewline','optHardWrap'].forEach(id=>{
+        if (saved[id] !== undefined) document.getElementById(id).checked = !!saved[id];
+      });
+      if (saved.wrapWidth) document.getElementById('wrapWidth').value = saved.wrapWidth;
+    })();
+
+    // 옵션 변경 시 저장
+    document.querySelectorAll('#optCleanHeaders,#optCutBoiler,#optSentenceNewline,#optHardWrap,#wrapWidth')
+      .forEach(el=>el.addEventListener('change',()=>{
+        localStorage.setItem('yn_sbs_opts', JSON.stringify({
+          optCleanHeaders: document.getElementById('optCleanHeaders').checked,
+          optCutBoiler: document.getElementById('optCutBoiler').checked,
+          optSentenceNewline: document.getElementById('optSentenceNewline').checked,
+          optHardWrap: document.getElementById('optHardWrap').checked,
+          wrapWidth: parseInt(document.getElementById('wrapWidth').value,10)
+        }));
+      }));
+
+    // 다크 모드 토글
+    $('#btnDark').addEventListener('click', () => {
+      document.body.classList.toggle('dark');
+      localStorage.setItem('yn_theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+    });
+
+    // 변환
+    $('#btnConvert').addEventListener('click', () => {
+      const raw = $('#inputText').value || '';
+      const cleanHeaders = $('#optCleanHeaders').checked;
+      const cutBoiler = $('#optCutBoiler').checked;
+      const sentenceNewline = $('#optSentenceNewline').checked;
+      const hardWrapOn = $('#optHardWrap').checked;
+      const wrapWidth = Math.max(10, Math.min(80, parseInt($('#wrapWidth').value || '20', 10)));
+
+      const start = performance.now();
+      const out = convertPipeline(raw, { cleanHeaders, cutBoiler, sentenceNewline, hardWrapOn, wrapWidth });
+      const ms = Math.max(1, Math.round(performance.now() - start));
+
+      $('#outputText').value = out;
+      const base = preprocessYonhap(raw, { cleanHeaders, cutBoiler });
+      const { masked } = maskQuotes(base);
+      const origSent = splitSentences(masked).length;
+      const outLines = out.split('\n').length;
+      $('#stats').textContent = `전처리 문장 수(인용부 제외): ${origSent} | 결과 줄 수: ${outLines} | 처리: ${ms}ms | 폭: ${wrapWidth}자`;
+    });
+
+    // 복사
+    $('#btnCopy').addEventListener('click', async () => {
+      const text = $('#outputText').value || '';
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else {
+          const ta = $('#outputText'); ta.removeAttribute('readonly'); ta.select();
+          document.execCommand('copy'); ta.setAttribute('readonly','readonly');
+        }
+        alert('텍스트가 복사되었습니다!');
+      } catch { alert('복사에 실패했습니다. 수동으로 복사해주세요.'); }
+    });
+
+    // 지우기
+    $('#btnClear').addEventListener('click', () => {
+      $('#inputText').value = '';
+      $('#outputText').value = '';
+      $('#stats').textContent = '';
+      $('#inputText').focus();
+    });
+
+    // 단축키: 변환
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); $('#btnConvert').click(); }
+    });
+  </script>
+</body>
+</html>
